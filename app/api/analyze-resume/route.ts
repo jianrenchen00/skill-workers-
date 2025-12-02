@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import pdf from "pdf-parse";
+import PDFParser from "pdf2json";
 
 // Initialize Gemini
 // Note: Make sure GOOGLE_API_KEY is set in .env.local
@@ -17,13 +17,26 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Missing file or userId" }, { status: 400 });
         }
 
-        // 1. Extract text from PDF
+        // 1. Extract text from PDF using pdf2json
         const buffer = Buffer.from(await file.arrayBuffer());
         let resumeText = "";
 
         try {
-            const data = await pdf(buffer);
-            resumeText = data.text;
+            const pdfParser = new PDFParser(null, 1); // 1 = text content only
+
+            resumeText = await new Promise((resolve, reject) => {
+                pdfParser.on("pdfParser_dataError", (errData: any) => reject(errData.parserError));
+                pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
+                    // pdf2json returns URL-encoded text, so we need to decode it
+                    // But with option 1 (text only), getRawTextContent() is usually better if available, 
+                    // or we parse the JSON structure. 
+                    // Actually, pdf2json's getRawTextContent() is the easiest way.
+                    resolve(pdfParser.getRawTextContent());
+                });
+
+                pdfParser.parseBuffer(buffer);
+            }) as string;
+
         } catch (e) {
             console.error("PDF Parse Error:", e);
             return NextResponse.json({ error: "Failed to parse PDF" }, { status: 500 });
