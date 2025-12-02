@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import ResumeUploader from "@/components/dashboard/ResumeUploader";
 import AutoRefresh from "@/components/dashboard/AutoRefresh";
+import UpgradeButton from "@/components/dashboard/UpgradeButton";
 import { Loader2, CheckCircle, AlertTriangle, Briefcase, Lightbulb, XCircle } from "lucide-react";
 
 export default async function DashboardPage({ params }: { params: Promise<{ lang: string }> }) {
@@ -204,16 +205,29 @@ export default async function DashboardPage({ params }: { params: Promise<{ lang
                         <div className="mt-12 border-t border-gray-200 pt-8 dark:border-gray-700">
                             <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-8 text-center dark:border-indigo-900/30 dark:bg-indigo-900/10">
                                 <h3 className="text-xl font-bold text-indigo-900 dark:text-indigo-100">
-                                    {lang === 'zh' ? '解锁无限次分析' : 'Unlock Unlimited Analysis'}
+                                    {profile?.subscription_status === 'active'
+                                        ? (lang === 'zh' ? '您是 Pro 会员' : 'You are a Pro Member')
+                                        : (lang === 'zh' ? '解锁无限次分析' : 'Unlock Unlimited Analysis')
+                                    }
                                 </h3>
                                 <p className="mt-2 text-indigo-700 dark:text-indigo-300">
-                                    {lang === 'zh'
-                                        ? '您已使用完免费试用额度。升级到 Pro 版以分析更多简历并获取定制化职位推荐。'
-                                        : 'You have used your free trial. Upgrade to Pro to analyze more resumes and get tailored job matches.'}
+                                    {profile?.subscription_status === 'active'
+                                        ? (lang === 'zh'
+                                            ? '感谢您的支持！您可以无限次使用简历分析功能。'
+                                            : 'Thank you for your support! You have unlimited access to resume analysis.')
+                                        : (lang === 'zh'
+                                            ? '您已使用完免费试用额度。升级到 Pro 版以分析更多简历并获取定制化职位推荐。'
+                                            : 'You have used your free trial. Upgrade to Pro to analyze more resumes and get tailored job matches.')
+                                    }
                                 </p>
-                                <button disabled className="mt-6 rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white opacity-75 cursor-not-allowed shadow-sm hover:bg-indigo-500">
-                                    {lang === 'zh' ? '升级到 Pro (即将推出)' : 'Upgrade to Pro (Coming Soon)'}
-                                </button>
+
+                                {profile?.subscription_status !== 'active' && (
+                                    <UpgradeButton
+                                        userId={user.id}
+                                        email={user.email || ""}
+                                        lang={lang}
+                                    />
+                                )}
                             </div>
                         </div>
                     </div>
