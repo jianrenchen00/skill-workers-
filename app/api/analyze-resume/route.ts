@@ -22,7 +22,7 @@ export async function POST(request: Request) {
         let resumeText = "";
 
         try {
-            const pdfParser = new PDFParser(null, 1); // 1 = text content only
+            const pdfParser = new PDFParser(null, true); // true = text content only
 
             resumeText = await new Promise((resolve, reject) => {
                 pdfParser.on("pdfParser_dataError", (errData: any) => reject(errData.parserError));
