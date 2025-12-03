@@ -3,12 +3,19 @@ import JobCard from "@/components/business/JobCard";
 import { Search, Filter } from "lucide-react";
 import { Job } from "@/types";
 
-export default async function JobsPage({ params }: { params: Promise<{ lang: string }> }) {
+export default async function JobsPage({
+    params,
+    searchParams,
+}: {
+    params: Promise<{ lang: string }>;
+    searchParams: Promise<{ query?: string; location?: string }>;
+}) {
     const { lang } = await params;
+    const { query, location } = await searchParams;
     const supabase = await createClient();
 
-    // Fetch jobs with company data
-    const { data: jobs, error } = await supabase
+    // Start building the query
+    let dbQuery = supabase
         .from("jobs")
         .select(`
       *,
@@ -16,6 +23,19 @@ export default async function JobsPage({ params }: { params: Promise<{ lang: str
     `)
         .eq("status", "published")
         .order("created_at", { ascending: false });
+
+    // Apply filters if present
+    if (query) {
+        dbQuery = dbQuery.ilike("title", `%${query}%`);
+        // Note: Simple title search for now. For full text search across multiple fields, 
+        // we'd need a different approach or RPC function.
+    }
+
+    if (location) {
+        dbQuery = dbQuery.ilike("location", `%${location}%`);
+    }
+
+    const { data: jobs, error } = await dbQuery;
 
     if (error) {
         console.error("Error fetching jobs:", error);
@@ -27,21 +47,21 @@ export default async function JobsPage({ params }: { params: Promise<{ lang: str
             subtitle: "Find jobs that match your skills and visa requirements.",
             searchPlaceholder: "Search jobs...",
             filter: "Filters",
-            noJobs: "No jobs found at the moment. Please check back later.",
+            noJobs: "No jobs found matching your criteria.",
         },
         zh: {
             title: "最新职位机会",
             subtitle: "发现匹配你技能和签证要求的工作。",
             searchPlaceholder: "搜索职位...",
             filter: "筛选",
-            noJobs: "暂时没有找到职位。请稍后再来看看。",
+            noJobs: "没有找到符合条件的职位。",
         },
     }[lang as "en" | "zh"] || {
         title: "Latest Opportunities",
         subtitle: "Find jobs that match your skills and visa requirements.",
         searchPlaceholder: "Search jobs...",
         filter: "Filters",
-        noJobs: "No jobs found at the moment. Please check back later.",
+        noJobs: "No jobs found matching your criteria.",
     };
 
     return (
@@ -59,14 +79,17 @@ export default async function JobsPage({ params }: { params: Promise<{ lang: str
                     </div>
 
                     <div className="flex gap-2">
-                        <div className="relative">
+                        <form className="relative">
                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                             <input
                                 type="text"
+                                name="query"
+                                defaultValue={query}
                                 placeholder={t.searchPlaceholder}
                                 className="h-10 rounded-md border border-gray-300 bg-white pl-9 pr-4 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-white"
                             />
-                        </div>
+                            {location && <input type="hidden" name="location" value={location} />}
+                        </form>
                         <button className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800">
                             <Filter className="h-4 w-4" />
                             {t.filter}

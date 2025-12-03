@@ -9,16 +9,38 @@ const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
 
 export async function POST(request: Request) {
     try {
-        const formData = await request.formData();
-        const file = formData.get("resume") as File;
-        const userId = formData.get("userId") as string;
+        const { insight_id } = await request.json();
 
-        if (!file || !userId) {
-            return NextResponse.json({ error: "Missing file or userId" }, { status: 400 });
+        if (!insight_id) {
+            return NextResponse.json({ error: "Missing insight_id" }, { status: 400 });
         }
 
-        // 1. Extract text from PDF using pdf2json
-        const buffer = Buffer.from(await file.arrayBuffer());
+        const supabase = await createClient();
+
+        // 1. Fetch insight record to get file path
+        const { data: insight, error: fetchError } = await supabase
+            .from("resume_insights")
+            .select("file_path, user_id")
+            .eq("id", insight_id)
+            .single();
+
+        if (fetchError || !insight) {
+            console.error("Fetch Insight Error:", fetchError);
+            return NextResponse.json({ error: "Insight not found" }, { status: 404 });
+        }
+
+        // 2. Download file from Storage
+        const { data: fileData, error: downloadError } = await supabase.storage
+            .from("resumes")
+            .download(insight.file_path);
+
+        if (downloadError || !fileData) {
+            console.error("Download Error:", downloadError);
+            return NextResponse.json({ error: "Failed to download resume file" }, { status: 500 });
+        }
+
+        // 3. Extract text from PDF using pdf2json
+        const buffer = Buffer.from(await fileData.arrayBuffer());
         let resumeText = "";
 
         try {
@@ -27,10 +49,6 @@ export async function POST(request: Request) {
             resumeText = await new Promise((resolve, reject) => {
                 pdfParser.on("pdfParser_dataError", (errData: any) => reject(errData.parserError));
                 pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
-                    // pdf2json returns URL-encoded text, so we need to decode it
-                    // But with option 1 (text only), getRawTextContent() is usually better if available, 
-                    // or we parse the JSON structure. 
-                    // Actually, pdf2json's getRawTextContent() is the easiest way.
                     resolve(pdfParser.getRawTextContent());
                 });
 
@@ -47,7 +65,7 @@ export async function POST(request: Request) {
             resumeText = resumeText.substring(0, 30000);
         }
 
-        // 2. Analyze with Gemini
+        // 4. Analyze with Gemini
         const model = genAI.getGenerativeModel({
             model: "gemini-1.5-flash",
             generationConfig: { responseMimeType: "application/json" }
@@ -82,19 +100,15 @@ export async function POST(request: Request) {
         const response = result.response;
         const analysisJson = JSON.parse(response.text());
 
-        // 3. Save to Supabase
-        const supabase = await createClient();
-
-        // Check if user already has an analysis (Monetization check could go here, but we do it on frontend for now)
-
+        // 5. Save to Supabase
         const { error: dbError } = await supabase
             .from("resume_insights")
-            .insert({
-                user_id: userId,
+            .update({
                 status: "completed",
                 analysis_data: analysisJson,
                 resume_text_snippet: resumeText.substring(0, 200) + "..."
-            });
+            })
+            .eq("id", insight_id);
 
         if (dbError) {
             console.error("Database Error:", dbError);
