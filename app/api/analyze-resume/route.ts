@@ -5,7 +5,7 @@ import PDFParser from "pdf2json";
 
 // Initialize Gemini
 // Note: Make sure GOOGLE_API_KEY is set in .env.local
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "dummy_key_for_build");
 
 export async function POST(request: Request) {
     try {
